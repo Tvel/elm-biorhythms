@@ -5,6 +5,7 @@ import Maybe
 import Result exposing (fromMaybe)
 import Time exposing (..)
 import DateTime exposing (..)
+import Json.Decode as D
 
 type alias BirthDate = {day: Int, month: Month, year: Int}
 
@@ -76,6 +77,12 @@ stringToMonth month =
         "Dec" -> Just Dec
         _ -> Nothing
 
+decoderStringToMonth: String -> D.Decoder Month
+decoderStringToMonth month =
+    case (stringToMonth month) of
+        Just m -> D.succeed m
+        Nothing -> D.fail ("Invalid month: " ++ month)
+
 dateToString: Zone -> Posix -> String
 dateToString zone time =
     let
@@ -88,3 +95,13 @@ dateToString zone time =
 dateTimeToString: Zone -> DateTime -> String
 dateTimeToString zone time =
     dateToString zone (DateTime.toPosix time)
+
+incrementDate date times =
+    case times of
+        0 -> DateTime.incrementDay date
+        _ -> incrementDate (DateTime.incrementDay date) (times - 1)
+
+decrementDate date times =
+    case times of
+        0 -> DateTime.decrementDay date
+        _ -> decrementDate (DateTime.decrementDay date) (times - 1)

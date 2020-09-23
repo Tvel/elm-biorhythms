@@ -1,9 +1,9 @@
-module Main exposing (..)
+port module Main exposing (..)
 
-import Biorhythm exposing (Biorhythm, PeriodCycle, accurateCycle, calculateBiorhythm, normalCycle)
+import Biorhythm exposing (Biorhythm, PeriodCycle, accurateCycle, calculateBiorhythm, normalCycle, periodCycleToString, stringToCycle)
 import BiorhythmViz exposing (BiorhythmData)
 import Browser
-import DateCalc exposing (BirthDate, dateTimeToString, fromPartsToDate, intToMonth, stringToMonth)
+import DateCalc exposing (BirthDate, dateTimeToString, decoderStringToMonth, fromPartsToDate, intToMonth, monthToString, stringToMonth)
 import DateTime exposing (DateTime, fromPosix)
 import Debug exposing (toString)
 import Html exposing (Html, button, div, h2, h6, input, li, option, p, select, span, text, ul)
@@ -13,15 +13,19 @@ import Maybe
 import Result exposing (fromMaybe)
 import Task
 import Time exposing (Month(..), Posix, Zone, ZoneName(..))
+import Json.Decode as D
+import Json.Encode as E
 
+port setStorage : E.Value -> Cmd msg
 
+main : Program E.Value Model Msg
 main =
-    Browser.element
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
+  Browser.element
+    { init = init
+    , view = view
+    , update = updateWithStorage
+    , subscriptions = \_ -> Sub.none
+    }
 
 
 type alias Person =
@@ -31,34 +35,74 @@ type alias Person =
 type alias Model =
     { value : Int
     , selected : Maybe Person
-    , form : { day : String, month : String, year : String }
+    , form : { day : String, month : String, year : String, name: String }
     , zone : Time.Zone
     , time : DateTime
     , periodCycle : PeriodCycle
+    , people : List Person
     }
 
+type alias SaveModel =
+    { periodCycle: String
+    , people: List Person
+    }
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( { value = 0
-      , form = { day = "11", month = "Jul", year = "1990" }
-      , selected = Just { day = 11, month = Jul, year = 1990, name = "Tosil" }
-      , zone = Time.utc
-      , time = fromPosix (Time.millisToPosix 0)
-      , periodCycle = accurateCycle
-      }
+defaultModel: Model
+defaultModel =
+    { value = 0
+    , form = { day = "11", month = "Jul", year = "1990", name = "Tosil" }
+    , selected = Just { day = 11, month = Jul, year = 1990, name = "Tosil" }
+    , zone = Time.utc
+    , time = fromPosix (Time.millisToPosix 0)
+    , periodCycle = accurateCycle
+    , people = [ { day = 11, month = Jul, year = 1990, name = "Tosil" } ]
+    }
+
+init : E.Value -> ( Model, Cmd Msg )
+init flags =
+  (
+    case D.decodeValue decoder flags of
+      Ok saveModel -> { defaultModel | periodCycle = stringToCycle saveModel.periodCycle }
+      Err _ -> defaultModel
     , Task.perform AdjustTimeZone Time.here
-    )
+  )
 
+decoder : D.Decoder SaveModel
+decoder =
+  D.map2 SaveModel
+    (D.field "periodCycle" D.string)
+    (D.field "people" personListDecoder )
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.none
+personListDecoder : D.Decoder (List Person)
+personListDecoder =
+  D.list decoderPerson
 
+decoderPerson : D.Decoder Person
+decoderPerson =
+    D.map4 Person
+      (D.field "day" D.int)
+      (D.field "month" (D.string |> D.andThen decoderStringToMonth))
+      (D.field "year" D.int)
+      (D.field "name" D.string)
+
+encode : Model -> E.Value
+encode model =
+  E.object
+    [ ("periodCycle", E.string (periodCycleToString model.periodCycle))
+    , ("people", E.list encodePerson model.people)
+    ]
+
+encodePerson: Person -> E.Value
+encodePerson person =
+    E.object
+        [ ("day", E.int person.day)
+        , ("month", E.string (monthToString person.month))
+        , ("year", E.int person.day)
+        , ("name", E.string person.name)
+        ]
 
 setTimeToNow =
     Task.perform SetTimeNow Time.now
-
 
 type Msg
     = AdjustTimeZone Time.Zone
@@ -70,6 +114,15 @@ type Msg
     | PrevDays
     | ChangePeriodType String
 
+
+updateWithStorage : Msg -> Model -> ( Model, Cmd Msg )
+updateWithStorage msg oldModel =
+  let
+    ( newModel, cmds ) = update msg oldModel
+  in
+  ( newModel
+  , Cmd.batch [ setStorage (encode newModel), cmds ]
+  )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -116,47 +169,21 @@ update msg model =
             )
 
         NextDays ->
-            ( { model | time = incrementDate model.time 14 }
+            ( { model | time = DateCalc.incrementDate model.time 14 }
             , Cmd.none
             )
 
         PrevDays ->
-            ( { model | time = decrementDate model.time 14 }
+            ( { model | time = DateCalc.decrementDate model.time 14 }
             , Cmd.none
             )
 
         ChangePeriodType periodType ->
-            let
-                cycle = case periodType of
-                    "normal" -> normalCycle
-                    "accurate" -> accurateCycle
-                    _ -> normalCycle
-            in
-            ( { model | periodCycle = cycle }
+            ( { model | periodCycle = stringToCycle periodType}
             , setTimeToNow
             )
 
-incrementDate date index =
-    case index of
-        0 ->
-            DateTime.incrementDay date
-
-        _ ->
-            incrementDate (DateTime.incrementDay date) (index - 1)
-
-
-decrementDate date index =
-    case index of
-        0 ->
-            DateTime.decrementDay date
-
-        _ ->
-            decrementDate (DateTime.decrementDay date) (index - 1)
-
-
-
 -- VIEW
-
 
 view : Model -> Html Msg
 view model =
@@ -191,13 +218,6 @@ view model =
                     ]
         ]
 
-periodCycleToString: PeriodCycle -> String
-periodCycleToString periodCycle =
-    if periodCycle == normalCycle then
-        "normal"
-    else if periodCycle == accurateCycle then
-        "accurate"
-    else "NA"
 
 
 monthToOption : Month -> Html Msg
@@ -211,7 +231,7 @@ drawDateInfo model birthdate =
         , p [] [ text ("days: " ++ String.fromInt (DateCalc.daysSinceBirth birthdate model.time)) ]
     ]
 
-validateForm : { day : String, month : String, year : String } -> Maybe BirthDate
+validateForm : { day : String, month : String, year : String, name: String } -> Maybe BirthDate
 validateForm form =
     Maybe.map3
         (\d m y -> { day = d, month = m, year = y })
@@ -226,7 +246,7 @@ validateBirthDate maybeBirthDate =
         |> Result.andThen fromPartsToDate
 
 
-validate : { day : String, month : String, year : String } -> Result String DateTime
+validate : { day : String, month : String, year : String, name : String } -> Result String DateTime
 validate form =
     validateBirthDate (validateForm form)
 

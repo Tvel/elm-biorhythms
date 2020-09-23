@@ -10,6 +10,20 @@ accurateCycle = { physical = 23.688437, emotional = 28.426125, intellectual = 33
 normalCycle : PeriodCycle
 normalCycle = { physical = 23, emotional = 28, intellectual = 33 }
 
+stringToCycle: String -> PeriodCycle
+stringToCycle periodString = case periodString of
+    "normal" -> normalCycle
+    "accurate" -> accurateCycle
+    _ -> normalCycle
+
+periodCycleToString: PeriodCycle -> String
+periodCycleToString periodCycle =
+    if periodCycle == normalCycle then
+        "normal"
+    else if periodCycle == accurateCycle then
+        "accurate"
+    else "NA"
+
 calculateBiorhythm: PeriodCycle -> DaysSinceBirth -> Biorhythm
 calculateBiorhythm cycle days =
     {
