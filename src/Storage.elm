@@ -38,7 +38,7 @@ encodePerson person =
     E.object
         [ ( "day", E.int person.day )
         , ( "month", E.string (Month.toString person.month) )
-        , ( "year", E.int person.day )
+        , ( "year", E.int person.year )
         , ( "name", E.string person.name )
         ]
 
