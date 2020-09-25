@@ -5639,7 +5639,7 @@ var $author$project$Storage$encodePerson = function (person) {
 					$author$project$Month$toString(person.dq))),
 				_Utils_Tuple2(
 				'year',
-				$elm$json$Json$Encode$int(person.fU)),
+				$elm$json$Json$Encode$int(person.d7)),
 				_Utils_Tuple2(
 				'name',
 				$elm$json$Json$Encode$string(person.ac))
