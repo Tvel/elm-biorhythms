@@ -1,21 +1,24 @@
 module Main exposing (..)
 
-import Biorhythm exposing (Biorhythm, PeriodCycle, accurateCycle, calculateBiorhythm, normalCycle, periodCycleToString, stringToCycle)
-import BiorhythmViz exposing (BiorhythmData)
+import Biorhythm exposing (Biorhythm)
+import Biorhythm.Chart exposing (BiorhythmData)
+import Biorhythm.PeroidCycle exposing (PeriodCycle)
 import Browser
-import DateCalc exposing (BirthDate, dateTimeToString, decoderStringToMonth, fromPartsToDate, intToMonth, monthToString, stringToMonth)
-import DateTime exposing (DateTime, fromPosix)
+import DateCalc exposing (BirthDate)
+import DateTime exposing (DateTime)
 import Debug exposing (toString)
 import Html exposing (Html, button, div, h2, h6, input, li, option, p, select, span, text, ul)
-import Html.Attributes exposing (checked, placeholder, selected, type_, value)
+import Html.Attributes exposing (checked, disabled, placeholder, selected, style, type_, value)
 import Html.Events exposing (onClick, onInput)
-import Json.Decode as D
+import Html.Keyed as Keyed
 import Json.Encode as E
 import Maybe
-import Result exposing (fromMaybe)
-import Storage exposing (Person)
+import Month
+import People exposing (Person)
+import Result
+import Storage
 import Task
-import Time exposing (Month(..), Posix, Zone, ZoneName(..))
+import Time exposing (Month(..), Zone, ZoneName(..))
 
 
 main : Program E.Value Model Msg
@@ -34,7 +37,6 @@ type alias Form =
 
 type alias Model =
     { value : Int
-    , selected : Maybe Person
     , form : Form
     , zone : Time.Zone
     , time : DateTime
@@ -47,10 +49,9 @@ defaultModel : Model
 defaultModel =
     { value = 0
     , form = Form "11" "Jul" "1990" "Tosil"
-    , selected = Just { day = 11, month = Jul, year = 1990, name = "Tosil" }
     , zone = Time.utc
-    , time = fromPosix (Time.millisToPosix 0)
-    , periodCycle = accurateCycle
+    , time = DateTime.fromPosix (Time.millisToPosix 0)
+    , periodCycle = Biorhythm.PeroidCycle.accurateCycle
     , people = [ { day = 11, month = Jul, year = 1990, name = "Tosil" } ]
     }
 
@@ -59,7 +60,9 @@ init : E.Value -> ( Model, Cmd Msg )
 init flags =
     ( case Storage.decode flags of
         Ok saveModel ->
-            { defaultModel | periodCycle = stringToCycle saveModel.periodCycle }
+            { defaultModel | periodCycle = Biorhythm.PeroidCycle.fromString saveModel.periodCycle
+            , people = saveModel.people
+            }
 
         Err _ ->
             defaultModel
@@ -69,9 +72,9 @@ init flags =
 
 modelToSaveModel : Model -> Storage.SaveModel
 modelToSaveModel model =
-    Storage.SaveModel (periodCycleToString model.periodCycle) model.people
+    Storage.SaveModel (Biorhythm.PeroidCycle.toString model.periodCycle) model.people
 
-
+setTimeToNow: Cmd Msg
 setTimeToNow =
     Task.perform SetTimeNow Time.now
 
@@ -82,9 +85,13 @@ type Msg
     | ChangeDay String
     | ChangeMonth String
     | ChangeYear String
+    | ChangeName String
     | NextDays
     | PrevDays
     | ChangePeriodType String
+    | ChangeSelected String
+    | Update
+    | Delete
 
 
 updateWithStorage : Msg -> Model -> ( Model, Cmd Msg )
@@ -109,7 +116,7 @@ update msg model =
         SetTimeNow time ->
             let
                 datetime =
-                    Maybe.withDefault (fromPosix (Time.millisToPosix 0)) (DateCalc.posixToDate time)
+                    Maybe.withDefault (DateTime.fromPosix (Time.millisToPosix 0)) (DateCalc.posixToDate time)
             in
             ( { model | time = datetime }
             , Cmd.none
@@ -142,6 +149,15 @@ update msg model =
             , Cmd.none
             )
 
+        ChangeName name ->
+            let
+                asNameInForm form n =
+                    { form | name = n }
+            in
+            ( { model | form = asNameInForm model.form name }
+            , Cmd.none
+            )
+
         NextDays ->
             ( { model | time = DateCalc.incrementDate model.time 14 }
             , Cmd.none
@@ -153,9 +169,44 @@ update msg model =
             )
 
         ChangePeriodType periodType ->
-            ( { model | periodCycle = stringToCycle periodType }
+            ( { model | periodCycle = Biorhythm.PeroidCycle.fromString periodType }
             , setTimeToNow
             )
+
+        ChangeSelected selectedName ->
+            let
+                mPerson =
+                    People.get model.people selectedName
+            in
+            ( case mPerson of
+                Nothing ->
+                    model
+
+                Just person ->
+                    { model | form = personToForm person }
+            , Cmd.none
+            )
+
+        Update ->
+            ( case validateForm model.form of
+                Nothing ->
+                    model
+
+                Just birthdate ->
+                    { model | people = People.update model.people (Person birthdate.day birthdate.month birthdate.year model.form.name)}
+            --, Cmd.map (always ChangeSelected model.form.name) Cmd.none
+            , Cmd.none
+            )
+
+        Delete ->
+            ( { model | people = People.remove model.people model.form.name }
+            , Cmd.none
+            )
+
+
+personToForm : Person -> Form
+personToForm person =
+    Form (String.fromInt person.day) (Month.toString person.month) (String.fromInt person.year) person.name
 
 
 
@@ -167,13 +218,17 @@ view model =
     div []
         [ div []
             [ input [ type_ "number", placeholder "day", value model.form.day, onInput ChangeDay ] []
-            , select [ onInput ChangeMonth, value model.form.month ] (List.range 1 12 |> List.map intToMonth |> List.map monthToOption)
+            , select [ onInput ChangeMonth, value model.form.month ] (List.range 1 12 |> List.map Month.fromInt |> List.map monthToOption)
             , input [ type_ "number", placeholder "year", value model.form.year, onInput ChangeYear ] []
+            , input [ type_ "text", placeholder "name", value model.form.name, onInput ChangeName ] []
+            , button [ onClick Update ] [ text "Add/Update" ]
+            , button [ onClick Delete ] [ text "Delete" ]
             ]
+        , div [] [ peopleSelect model.people model.form ]
         , div []
-            [ input [ type_ "radio", value "normal", checked (periodCycleToString model.periodCycle == "normal"), onInput ChangePeriodType ] []
+            [ input [ type_ "radio", value "normal", checked (Biorhythm.PeroidCycle.toString model.periodCycle == "normal"), onInput ChangePeriodType ] []
             , span [] [ text "Normal" ]
-            , input [ type_ "radio", value "accurate", checked (periodCycleToString model.periodCycle == "accurate"), onInput ChangePeriodType ] []
+            , input [ type_ "radio", value "accurate", checked (Biorhythm.PeroidCycle.toString model.periodCycle == "accurate"), onInput ChangePeriodType ] []
             , span [] [ text "Accurate" ]
             ]
         , div [] [ button [ onClick PrevDays ] [ text "Prev" ], button [ onClick NextDays ] [ text "Next" ] ]
@@ -191,10 +246,31 @@ view model =
                         range =
                             List.range (daysSinceBirth - 7) (daysSinceBirth + 8)
                       in
-                      div [] [ BiorhythmViz.view (range |> List.map (calcData model.periodCycle birthdate)) model.zone ]
+                      div [] [ Biorhythm.Chart.view (range |> List.map (calcData model.periodCycle birthdate)) model.zone ]
                     ]
         ]
 
+
+peopleSelect : List Person -> Form -> Html Msg
+peopleSelect people selected =
+    keyedSelect ChangeSelected (.name selected) (List.append  [(Tuple.pair "-1" "------")] (List.map (\p -> (p.name, p.name)) people))
+
+keyedSelect : (String -> a) -> String -> List ( String, String ) -> Html a
+keyedSelect message selectedValue kvs =
+    let
+        toOption ( k, v ) =
+            ( k
+            , option
+                [ value k
+                , selected (k == selectedValue)
+                , disabled (k == "-1")
+                ]
+                [ text v ]
+            )
+    in
+    Keyed.node "select"
+        [ Html.Events.onInput message ]
+        (List.map toOption kvs)
 
 monthToOption : Month -> Html Msg
 monthToOption v =
@@ -202,9 +278,9 @@ monthToOption v =
 
 
 drawDateInfo model birthdate =
-    div []
-        [ p [] [ text ("center time: " ++ dateTimeToString model.zone model.time) ]
-        , p [] [ text ("birthday: " ++ dateTimeToString model.zone birthdate) ]
+    div [ style "display" "none"]
+        [ p [] [ text ("center time: " ++ DateCalc.dateTimeToString model.zone model.time) ]
+        , p [] [ text ("birthday: " ++ DateCalc.dateTimeToString model.zone birthdate) ]
         , p [] [ text ("days: " ++ String.fromInt (DateCalc.daysSinceBirth birthdate model.time)) ]
         ]
 
@@ -214,14 +290,14 @@ validateForm form =
     Maybe.map3
         (\d m y -> { day = d, month = m, year = y })
         (String.toInt form.day)
-        (stringToMonth form.month)
+        (Month.fromString form.month)
         (String.toInt form.year)
 
 
 validateBirthDate : Maybe BirthDate -> Result String DateTime
 validateBirthDate maybeBirthDate =
-    fromMaybe "Cannot parse input" maybeBirthDate
-        |> Result.andThen fromPartsToDate
+    Result.fromMaybe "Cannot parse input" maybeBirthDate
+        |> Result.andThen DateCalc.fromPartsToDate
 
 
 validate : Form -> Result String DateTime
@@ -233,22 +309,9 @@ calcData : PeriodCycle -> DateTime -> Int -> BiorhythmData
 calcData periodCycle birthDate day =
     let
         bio =
-            calculateBiorhythm periodCycle day
+            Biorhythm.calculate periodCycle day
 
         posixTime =
             Time.millisToPosix (DateTime.toMillis birthDate + (86400000 * day))
     in
     BiorhythmData day bio.physical bio.emotional bio.intellectual posixTime
-
-
-
---biorhythmToUl : Biorhythm -> Html Msg
---biorhythmToUl biorhythm =
---    ul []
---        [ li [] [ text ("physical: " ++ String.fromFloat biorhythm.physical) ]
---        , li [] [ text ("emotional: " ++ String.fromFloat biorhythm.emotional) ]
---        , li [] [ text ("intellectual: " ++ String.fromFloat biorhythm.intellectual) ]
---        ]
---calcUl : Int -> Html Msg
---calcUl day =
---    biorhythmToUl (calculateBiorhythm accurateCycle day)

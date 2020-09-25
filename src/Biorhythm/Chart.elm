@@ -1,4 +1,4 @@
-module BiorhythmViz exposing (BiorhythmData, view)
+module Biorhythm.Chart exposing (BiorhythmData, view)
 
 import Axis
 import Color exposing (Color)
@@ -6,7 +6,6 @@ import Path exposing (Path)
 import Scale exposing (ContinuousScale, OrdinalScale)
 import Scale.Color
 import Shape
-import Statistics
 import Time exposing (Zone)
 import TypedSvg exposing (g, svg, text_)
 import TypedSvg.Attributes as Explicit exposing (class, dy, fill, fontFamily, stroke, textAnchor, transform, viewBox)
@@ -20,12 +19,14 @@ w = 900
 
 
 h : Float
-h = 450
+h = 380
 
 
 padding : Float
 padding = 60
 
+paddingY : Float
+paddingY = 30
 
 series : List { label : String, accessor : BiorhythmData -> Float }
 series =
@@ -95,7 +96,7 @@ view model zone =
                 |> List.maximum
                 |> Maybe.withDefault 0
                 |> (\b -> ( -100, b ))
-                |> Scale.linear ( h - 2 * padding, 0 )
+                |> Scale.linear ( h - 2 * paddingY, 0 )
                 |> Scale.nice 4
 
         lineGenerator : ( Time.Posix, Float ) -> Maybe ( Float, Float )
@@ -112,7 +113,7 @@ view model zone =
         xGridLine index tick =
             TypedSvg.line
                 [ y1 0
-                , Explicit.y2 (percent 74)
+                , Explicit.y2 (percent 85)
                 , x1 (Scale.convert xScale tick)
                 , x2 (Scale.convert xScale tick)
                 , stroke <| Paint Color.black
@@ -121,7 +122,7 @@ view model zone =
                 []
     in
     svg [ viewBox 0 0 w h ]
-        [ g [ transform [ Translate (padding - 1) (h - padding) ] ]
+        [ g [ transform [ Translate (padding - 1) (h - paddingY) ] ]
             [ Axis.bottom [ Axis.tickCount 15 ] xScale ]
 
         -- bottom x ^
@@ -130,23 +131,23 @@ view model zone =
             [ Axis.bottom [ Axis.tickCount 0 ] xScale ]
 
         -- top X
-        , g [ transform [ Translate (padding - 1) (0 + padding) ] ]
+        , g [ transform [ Translate (padding - 1) (0 + paddingY) ] ]
             [ Axis.bottom [ Axis.tickCount 0 ] xScale ]
 
         -- days Y
-        , g [ transform [ Translate (padding - 0.5) padding ] ] <| List.indexedMap xGridLine <| Scale.ticks xScale 15
+        , g [ transform [ Translate (padding - 0.5) paddingY ] ] <| List.indexedMap xGridLine <| Scale.ticks xScale 15
 
         -- right Y
-        , g [ transform [ Translate (w - padding - 1) padding ] ]
+        , g [ transform [ Translate (w - padding - 1) paddingY ] ]
             [ Axis.left [ Axis.tickCount 0 ] yScale
             ]
 
         --left Y
-        , g [ transform [ Translate (padding - 1) padding ] ]
+        , g [ transform [ Translate (padding - 1) paddingY ] ]
             [ Axis.left [ Axis.ticks (values first) ] yScale
             , text_ [ fontFamily [ "sans-serif" ], fontSize 10, x 5, y 5 ] [ text "" ]
             ]
-        , g [ transform [ Translate padding padding ], class [ "series" ] ]
+        , g [ transform [ Translate padding paddingY ], class [ "series" ] ]
             (List.map
                 (\{ accessor, label } ->
                     Path.element (line accessor)
