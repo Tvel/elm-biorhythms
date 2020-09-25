@@ -43,11 +43,13 @@ type alias Model =
     , people : List Person
     }
 
+defaultForm =
+    Form "11" "Jul" "1990" "Tosil"
 
 defaultModel : Model
 defaultModel =
     { value = 0
-    , form = Form "11" "Jul" "1990" "Tosil"
+    , form = defaultForm
     , zone = Time.utc
     , time = DateTime.fromPosix (Time.millisToPosix 0)
     , periodCycle = Biorhythm.PeroidCycle.accurateCycle
@@ -59,8 +61,10 @@ init : E.Value -> ( Model, Cmd Msg )
 init flags =
     ( case Storage.decode flags of
         Ok saveModel ->
-            { defaultModel | periodCycle = Biorhythm.PeroidCycle.fromString saveModel.periodCycle
-            , people = saveModel.people
+            { defaultModel
+                | periodCycle = Biorhythm.PeroidCycle.fromString saveModel.periodCycle
+                , people = saveModel.people
+                , form = maybePersonToForm (List.head saveModel.people)
             }
 
         Err _ ->
@@ -69,11 +73,13 @@ init flags =
     )
 
 
+
 modelToSaveModel : Model -> Storage.SaveModel
 modelToSaveModel model =
     Storage.SaveModel (Biorhythm.PeroidCycle.toString model.periodCycle) model.people
 
-setTimeToNow: Cmd Msg
+
+setTimeToNow : Cmd Msg
 setTimeToNow =
     Task.perform SetTimeNow Time.now
 
@@ -192,8 +198,8 @@ update msg model =
                     model
 
                 Just birthdate ->
-                    { model | people = People.update model.people (Person birthdate.day birthdate.month birthdate.year model.form.name)}
-            --, Cmd.map (always ChangeSelected model.form.name) Cmd.none
+                    { model | people = People.update model.people (Person birthdate.day birthdate.month birthdate.year model.form.name) }
+              --, Cmd.map (always ChangeSelected model.form.name) Cmd.none
             , Cmd.none
             )
 
@@ -207,6 +213,11 @@ personToForm : Person -> Form
 personToForm person =
     Form (String.fromInt person.day) (Month.toString person.month) (String.fromInt person.year) person.name
 
+maybePersonToForm: Maybe Person -> Form
+maybePersonToForm mPerson=
+    case mPerson of
+        Just person -> personToForm person
+        Nothing -> Form "" "" "" ""
 
 
 -- VIEW
@@ -252,7 +263,8 @@ view model =
 
 peopleSelect : List Person -> Form -> Html Msg
 peopleSelect people selected =
-    keyedSelect ChangeSelected (.name selected) (List.append  [(Tuple.pair "-1" "------")] (List.map (\p -> (p.name, p.name)) people))
+    keyedSelect ChangeSelected (.name selected) (List.append [ Tuple.pair "-1" "------" ] (List.map (\p -> ( p.name, p.name )) people))
+
 
 keyedSelect : (String -> a) -> String -> List ( String, String ) -> Html a
 keyedSelect message selectedValue kvs =
@@ -271,13 +283,14 @@ keyedSelect message selectedValue kvs =
         [ Html.Events.onInput message ]
         (List.map toOption kvs)
 
+
 monthToOption : String -> Html Msg
 monthToOption v =
     option [ value v ] [ text v ]
 
 
 drawDateInfo model birthdate =
-    div [ style "display" "none"]
+    div [ style "display" "none" ]
         [ p [] [ text ("center time: " ++ DateCalc.dateTimeToString model.zone model.time) ]
         , p [] [ text ("birthday: " ++ DateCalc.dateTimeToString model.zone birthdate) ]
         , p [] [ text ("days: " ++ String.fromInt (DateCalc.daysSinceBirth birthdate model.time)) ]
