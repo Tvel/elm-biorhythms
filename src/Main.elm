@@ -6,7 +6,6 @@ import Biorhythm.PeroidCycle exposing (PeriodCycle)
 import Browser
 import DateCalc exposing (BirthDate)
 import DateTime exposing (DateTime)
-import Debug exposing (toString)
 import Html exposing (Html, button, div, h2, h6, input, li, option, p, select, span, text, ul)
 import Html.Attributes exposing (checked, disabled, placeholder, selected, style, type_, value)
 import Html.Events exposing (onClick, onInput)
@@ -218,7 +217,7 @@ view model =
     div []
         [ div []
             [ input [ type_ "number", placeholder "day", value model.form.day, onInput ChangeDay ] []
-            , select [ onInput ChangeMonth, value model.form.month ] (List.range 1 12 |> List.map Month.fromInt |> List.map monthToOption)
+            , select [ onInput ChangeMonth, value model.form.month ] (Month.months |> List.map monthToOption)
             , input [ type_ "number", placeholder "year", value model.form.year, onInput ChangeYear ] []
             , input [ type_ "text", placeholder "name", value model.form.name, onInput ChangeName ] []
             , button [ onClick Update ] [ text "Add/Update" ]
@@ -272,9 +271,9 @@ keyedSelect message selectedValue kvs =
         [ Html.Events.onInput message ]
         (List.map toOption kvs)
 
-monthToOption : Month -> Html Msg
+monthToOption : String -> Html Msg
 monthToOption v =
-    option [ value (toString v) ] [ text (toString v) ]
+    option [ value v ] [ text v ]
 
 
 drawDateInfo model birthdate =
