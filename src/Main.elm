@@ -4,7 +4,7 @@ import Biorhythm exposing (Biorhythm)
 import Biorhythm.Chart exposing (BiorhythmData)
 import Biorhythm.PeroidCycle exposing (PeriodCycle)
 import Browser
-import Css exposing (absolute, auto, calc, display, left, margin, margin2, minWidth, minus, pct, position, property, px, relative, right, top, width)
+import Css exposing (absolute, auto, bottom, calc, display, left, margin, margin2, minWidth, minus, pct, position, property, px, relative, right, top, width)
 import Css.Global exposing (media)
 import Css.Media as Media exposing (all, only, screen, withMedia)
 import DateCalc exposing (BirthDate)
@@ -293,8 +293,32 @@ view model =
                             List.range (daysSinceBirth - 7) (daysSinceBirth + 8)
                       in
                       div [ css [ position relative ] ]
-                        [ button [ onClick PrevDays, css [ position absolute, left (pct 1), top (calc (pct 50) minus (px 10)) ] ] [ text "<<" ]
-                        , button [ onClick NextDays, css [ position absolute, right (pct 1), top (calc (pct 50) minus (px 10)) ] ] [ text ">>" ]
+                        [ button
+                            [ onClick PrevDays
+                            , css
+                                [ position absolute
+                                , left (pct 1)
+                                , top (calc (pct 50) minus (px 10))
+                                , withMedia [ only screen [ Media.maxWidth (px 800) ] ]
+                                    [ top auto
+                                    , bottom (px -22)
+                                    ]
+                                ]
+                            ]
+                            [ text "<<" ]
+                        , button
+                            [ onClick NextDays
+                            , css
+                                [ position absolute
+                                , right (pct 1)
+                                , top (calc (pct 50) minus (px 10))
+                                , withMedia [ only screen [ Media.maxWidth (px 800) ] ]
+                                    [ top auto
+                                    , bottom (px -22)
+                                    ]
+                                ]
+                            ]
+                            [ text ">>" ]
                         , Svg.Styled.fromUnstyled (Biorhythm.Chart.view (range |> List.map (calcData model.periodCycle birthdate)) model.zone)
                         ]
                     ]
