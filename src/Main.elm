@@ -5,6 +5,8 @@ import Biorhythm.Chart exposing (BiorhythmData)
 import Biorhythm.PeroidCycle exposing (PeriodCycle)
 import Browser
 import Css exposing (absolute, auto, calc, display, left, margin, margin2, minWidth, minus, pct, position, property, px, relative, right, top, width)
+import Css.Global exposing (media)
+import Css.Media as Media exposing (all, only, screen, withMedia)
 import DateCalc exposing (BirthDate)
 import DateTime exposing (DateTime)
 import Html.Styled exposing (Html, button, div, h2, h6, input, li, option, p, select, span, text, ul)
@@ -233,38 +235,56 @@ maybePersonToForm mPerson =
 
 view : Model -> Html Msg
 view model =
-    div [ css
+    div
+        [ css
             [ property "display" "grid"
             , property "place-items" "center"
             , property "grid-template-rows" "auto 1fr"
-            ]]
-        [ div [css [property "display" "grid", property "place-items" "center", property "grid-gap" "10px"]]
-            [ div [ css [property "display" "grid", property "grid-gap" "10px", property "grid-template-columns" "160px 1fr 1fr" ] ]
-                [ div [] [ input [ css [width (px 30)], type_ "number", placeholder "day", value model.form.day, onInput ChangeDay ] []
-                        , select [ onInput ChangeMonth, value model.form.month ] (Month.months |> List.map monthToOption)
-                        , input [ css [width (px 50)], type_ "number", placeholder "year", value model.form.year, onInput ChangeYear ] [] ]
-                , div [] [ input [ css [width (px 150)], type_ "text", placeholder "name", value model.form.name, onInput ChangeName ] [] ]
-                , div [] [ button [ onClick Update ] [ text "Add/Update" ]
-                         , button [ onClick Delete ] [ text "Delete" ] ]
+            , property "grid-template-areas" "'controls' 'chart'"
+            , withMedia [ only screen [ Media.maxWidth (px 800) ] ]
+                [ property "grid-template-areas" "'chart' 'controls'"
+                , property "grid-template-rows" "auto"
                 ]
-            , div [css [ width (pct 100), property "display" "grid", property "grid-gap" "10px", property "grid-template-columns" "160px 2fr"]]
-                [ div []
-                    [ input [ type_ "radio", value "normal", checked (Biorhythm.PeroidCycle.toString model.periodCycle == "normal"), onInput ChangePeriodType ] []
-                    , span [] [ text "Normal" ]
-                    , input [ type_ "radio", value "accurate", checked (Biorhythm.PeroidCycle.toString model.periodCycle == "accurate"), onInput ChangePeriodType ] []
-                    , span [] [ text "Accurate" ]
-                    ]
-                ,peopleSelect model.people model.form
             ]
         ]
+        [ div
+            [ css
+                [ property "grid-area" "controls"
+                , property "display" "grid"
+                , property "grid-gap" "10px"
+                , property "grid-template-areas" "'birthday name add-delete' 'period people people'"
+                , property "grid-template-columns" "160px auto auto"
+                , withMedia [ only screen [ Media.maxWidth (px 800) ] ]
+                    [ property "grid-template-areas" "'period' 'birthday' 'name' 'add-delete'  'people'"
+                    , property "grid-template-columns" "auto"
+                    ]
+                ]
+            ]
+            [ div [ css [ property "grid-area" "birthday" ] ]
+                [ input [ css [ width (px 30) ], type_ "number", placeholder "day", value model.form.day, onInput ChangeDay ] []
+                , select [ onInput ChangeMonth, value model.form.month ] (Month.months |> List.map monthToOption)
+                , input [ css [ width (px 50) ], type_ "number", placeholder "year", value model.form.year, onInput ChangeYear ] []
+                ]
+            , div [ css [ property "grid-area" "name" ] ] [ input [ css [ width (px 150) ], type_ "text", placeholder "name", value model.form.name, onInput ChangeName ] [] ]
+            , div [ css [ property "grid-area" "add-delete" ] ]
+                [ button [ onClick Update ] [ text "Add/Update" ]
+                , button [ onClick Delete ] [ text "Delete" ]
+                ]
+            , div [ css [ property "grid-area" "period" ] ]
+                [ input [ type_ "radio", value "normal", checked (Biorhythm.PeroidCycle.toString model.periodCycle == "normal"), onInput ChangePeriodType ] []
+                , span [] [ text "Normal" ]
+                , input [ type_ "radio", value "accurate", checked (Biorhythm.PeroidCycle.toString model.periodCycle == "accurate"), onInput ChangePeriodType ] []
+                , span [] [ text "Accurate" ]
+                ]
+            , peopleSelect model.people model.form
+            ]
         , case validate model.form of
             Err err ->
                 h2 [] [ text err ]
 
             Ok birthdate ->
-                div [css [minWidth (pct 100)]]
+                div [ css [ minWidth (pct 100), property "grid-area" "chart" ] ]
                     [ drawDateInfo model birthdate
-
                     , let
                         daysSinceBirth =
                             DateCalc.daysSinceBirth birthdate model.time
@@ -272,10 +292,11 @@ view model =
                         range =
                             List.range (daysSinceBirth - 7) (daysSinceBirth + 8)
                       in
-                      div [ css [position relative]]
-                        [ button [ onClick PrevDays, css [position absolute, left (pct 1), top (calc (pct 50) minus (px 10)) ] ] [ text "<<" ]
-                        , button [ onClick NextDays, css [position absolute, right (pct 1), top (calc (pct 50) minus (px 10)) ] ] [ text ">>" ]
-                        , Svg.Styled.fromUnstyled (Biorhythm.Chart.view (range |> List.map (calcData model.periodCycle birthdate)) model.zone) ]
+                      div [ css [ position relative ] ]
+                        [ button [ onClick PrevDays, css [ position absolute, left (pct 1), top (calc (pct 50) minus (px 10)) ] ] [ text "<<" ]
+                        , button [ onClick NextDays, css [ position absolute, right (pct 1), top (calc (pct 50) minus (px 10)) ] ] [ text ">>" ]
+                        , Svg.Styled.fromUnstyled (Biorhythm.Chart.view (range |> List.map (calcData model.periodCycle birthdate)) model.zone)
+                        ]
                     ]
         ]
 
@@ -299,7 +320,7 @@ keyedSelect message selectedValue kvs =
             )
     in
     Keyed.node "select"
-        [ Html.Styled.Events.onInput message, css [width (px 150)] ]
+        [ Html.Styled.Events.onInput message, css [ width (px 150), property "grid-area" "people" ] ]
         (List.map toOption kvs)
 
 
