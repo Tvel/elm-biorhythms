@@ -253,7 +253,7 @@ view model =
                 , property "display" "grid"
                 , property "grid-gap" "10px"
                 , property "grid-template-areas" "'birthday name add-delete' 'period people people'"
-                , property "grid-template-columns" "160px auto auto"
+                , property "grid-template-columns" "auto auto auto"
                 , withMedia [ only screen [ Media.maxWidth (px 800) ] ]
                     [ property "grid-template-areas" "'period' 'birthday' 'name' 'add-delete'  'people'"
                     , property "grid-template-columns" "auto"
